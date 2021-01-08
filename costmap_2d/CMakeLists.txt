@@ -12,38 +12,36 @@ find_package(catkin REQUIRED
             message_filters
             message_generation
             nav_msgs
-            pcl_conversions
-            pcl_ros
             pluginlib
             roscpp
             sensor_msgs
             std_msgs
-            tf
+            tf2
+            tf2_geometry_msgs
+            tf2_ros
+            tf2_sensor_msgs
             visualization_msgs
             voxel_grid
         )
 
-find_package(PCL REQUIRED)
-remove_definitions(-DDISABLE_LIBUSB-1.0)
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system thread)
-find_package(CUDA 8.0 REQUIRED)
+find_package(CUDA REQUIRED)
 set_directory_properties( PROPERTIES COMPILE_DEFINITIONS "" )
 
 include_directories(
     include
     ${catkin_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIRS}
-    ${PCL_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${CUDA_INCLUDE_DIRS}
 )
 
 add_definitions(${EIGEN3_DEFINITIONS})
 
-set(GENCODE -gencode=arch=compute_50,code=sm_50)
-set(GENCODE ${GENCODE} -gencode=arch=compute_61,code=sm_61)
+set(GENCODE -gencode=arch=compute_53,code=sm_53)
 set(GENCODE ${GENCODE} -gencode=arch=compute_62,code=sm_62)
+set(GENCODE ${GENCODE} -gencode=arch=compute_72,code=sm_72)
 
 # messages
 add_message_files(
@@ -71,6 +69,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
     INCLUDE_DIRS
         include
+        ${EIGEN3_INCLUDE_DIRS}
     LIBRARIES costmap_2d layers
     CATKIN_DEPENDS
         dynamic_reconfigure
@@ -80,16 +79,14 @@ catkin_package(
         message_filters
         message_runtime
         nav_msgs
-        pcl_ros
         pluginlib
         roscpp
         sensor_msgs
         std_msgs
-        tf
+        tf2_ros
         visualization_msgs
         voxel_grid
     DEPENDS
-        PCL
         EIGEN3
         Boost
 )
@@ -108,7 +105,6 @@ add_library(costmap_2d
 )
 add_dependencies(costmap_2d ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(costmap_2d
-  ${PCL_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
 )
@@ -123,7 +119,7 @@ cuda_add_library(layers
   plugins/obstacle_layer.cu
   plugins/inflation_layer.cu
   plugins/utility.cu
-  OPTIONS ${GENCODE}
+  # OPTIONS ${GENCODE}
 )
 add_dependencies(layers ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(layers
@@ -135,7 +131,6 @@ add_executable(costmap_2d_markers src/costmap_2d_markers.cpp)
 add_dependencies(costmap_2d_markers ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(costmap_2d_markers
     costmap_2d
-    ${PCL_LIBRARIES}
     ${Boost_LIBRARIES}
     ${catkin_LIBRARIES}
 )
@@ -144,7 +139,6 @@ add_executable(costmap_2d_cloud src/costmap_2d_cloud.cpp)
 add_dependencies(costmap_2d_cloud ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(costmap_2d_cloud
     costmap_2d
-    ${PCL_LIBRARIES}
     ${Boost_LIBRARIES}
     ${catkin_LIBRARIES}
 )
@@ -153,7 +147,6 @@ add_executable(costmap_2d_node src/costmap_2d_node.cpp)
 add_dependencies(costmap_2d_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(costmap_2d_node
     costmap_2d
-    ${PCL_LIBRARIES}
     ${Boost_LIBRARIES}
     ${catkin_LIBRARIES}
 )
@@ -204,6 +197,9 @@ if(CATKIN_ENABLE_TESTING)
 
   catkin_add_gtest(array_parser_test test/array_parser_test.cpp)
   target_link_libraries(array_parser_test costmap_2d)
+
+  catkin_add_gtest(coordinates_test test/coordinates_test.cpp)
+  target_link_libraries(coordinates_test costmap_2d)
 endif()
 
 install( TARGETS
@@ -218,11 +214,17 @@ install(TARGETS
     layers
     ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
 
 install(FILES costmap_plugins.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+install(FILES test/TenByTen.yaml test/TenByTen.pgm
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/test
+)
+
 
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}

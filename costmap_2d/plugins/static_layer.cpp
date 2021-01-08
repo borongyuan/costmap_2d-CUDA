@@ -41,6 +41,8 @@
 #include <costmap_2d/cuda_static_layer.h>
 #include <costmap_2d/costmap_math.h>
 #include <pluginlib/class_list_macros.h>
+#include <tf2/convert.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 PLUGINLIB_EXPORT_CLASS(costmap_2d::StaticLayer, costmap_2d::Layer)
 
@@ -171,17 +173,18 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
 
   // resize costmap if size, resolution or origin do not match
   Costmap2D* master = layered_costmap_->getCostmap();
-  if (!layered_costmap_->isRolling() && (master->getSizeInCellsX() != size_x ||
-      master->getSizeInCellsY() != size_y ||
-      master->getResolution() != new_map->info.resolution ||
-      master->getOriginX() != new_map->info.origin.position.x ||
-      master->getOriginY() != new_map->info.origin.position.y ||
-      !layered_costmap_->isSizeLocked()))
+  if (!layered_costmap_->isRolling() &&
+      (master->getSizeInCellsX() != size_x ||
+       master->getSizeInCellsY() != size_y ||
+       master->getResolution() != new_map->info.resolution ||
+       master->getOriginX() != new_map->info.origin.position.x ||
+       master->getOriginY() != new_map->info.origin.position.y))
   {
     // Update the size of the layered costmap (and all layers, including this one)
     ROS_INFO("Resizing costmap to %d X %d at %f m/pix", size_x, size_y, new_map->info.resolution);
     layered_costmap_->resizeMap(size_x, size_y, new_map->info.resolution, new_map->info.origin.position.x,
-                                new_map->info.origin.position.y, true);
+                                new_map->info.origin.position.y,
+                                true /* set size_locked to true, prevents reconfigureCb from overriding map size*/);
   }
   else if (size_x_ != size_x || size_y_ != size_y ||
            resolution_ != new_map->info.resolution ||
@@ -312,17 +315,20 @@ void StaticLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int
     unsigned int mx, my;
     double wx, wy;
     // Might even be in a different frame
-    tf::StampedTransform transform;
+    geometry_msgs::TransformStamped transform;
     try
     {
-      tf_->lookupTransform(map_frame_, global_frame_, ros::Time(0), transform);
+      transform = tf_->lookupTransform(map_frame_, global_frame_, ros::Time(0));
     }
-    catch (tf::TransformException ex)
+    catch (tf2::TransformException ex)
     {
       ROS_ERROR("%s", ex.what());
       return;
     }
-    costmap_2d::cuda::static_layer::rollingUpdateCosts(master_grid, transform, this, layered_costmap_->getCostmap(), use_maximum_, min_i, min_j, max_i, max_j);
+    // Copy map data given proper transformations
+    tf2::Transform tf2_transform;
+    tf2::convert(transform.transform, tf2_transform);
+    costmap_2d::cuda::static_layer::rollingUpdateCosts(master_grid, tf2_transform, this, layered_costmap_->getCostmap(), use_maximum_, min_i, min_j, max_i, max_j);
   }
 }
 

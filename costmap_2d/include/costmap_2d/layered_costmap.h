@@ -41,7 +41,6 @@
 #include <costmap_2d/cost_values.h>
 #include <costmap_2d/layer.h>
 #include <costmap_2d/costmap_2d.h>
-#include <cstdio>
 #include <vector>
 #include <string>
 
@@ -59,7 +58,7 @@ public:
   /**
    * @brief  Constructor for a costmap
    */
-  LayeredCostmap(std::string global_frame, bool rolling_window, bool track_unknown, std::FILE *fout_=NULL);
+  LayeredCostmap(std::string global_frame, bool rolling_window, bool track_unknown);
 
   /**
    * @brief  Destructor
@@ -171,8 +170,6 @@ private:
   bool size_locked_;
   double circumscribed_radius_, inscribed_radius_;
   std::vector<geometry_msgs::Point> footprint_;
-
-  std::FILE *fout;
 };
 
 }  // namespace costmap_2d

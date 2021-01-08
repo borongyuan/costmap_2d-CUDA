@@ -28,7 +28,7 @@ __device__ bool worldToMap(double origin_x,double origin_y,double resolution,dou
 
 __global__ void rollingUpdateCostsKernel(unsigned char *master, unsigned long master_size, CostMapParameters masterParams,
 	unsigned char *costmap, unsigned long costmap_size, CostMapParameters staticLayerParams, CostMapParameters layeredCostmapParams,
-	tf::TransformData serializedTF,	int min_x, int min_y, int max_x, int max_y, bool use_maximum)
+	tf2::TransformData serializedTF,	int min_x, int min_y, int max_x, int max_y, bool use_maximum)
 {
 	int id=blockIdx.x*blockDim.x+threadIdx.x;
 	int deltay=id/(max_x-min_x);
@@ -61,9 +61,9 @@ __global__ void rollingUpdateCostsKernel(unsigned char *master, unsigned long ma
 	}
 }
  
-void costmap_2d::cuda::static_layer::rollingUpdateCosts(costmap_2d::Costmap2D& master_grid, tf::StampedTransform tf, costmap_2d::Costmap2D *staticLayer_costmap, costmap_2d::Costmap2D *layered_costmap, bool use_maximum, int min_x, int min_y, int max_x, int max_y)
+void costmap_2d::cuda::static_layer::rollingUpdateCosts(costmap_2d::Costmap2D& master_grid, tf2::Transform tf, costmap_2d::Costmap2D *staticLayer_costmap, costmap_2d::Costmap2D *layered_costmap, bool use_maximum, int min_x, int min_y, int max_x, int max_y)
 {
-	struct tf::TransformData serializedTF;
+	struct tf2::TransformData serializedTF;
 	tf.serialize(serializedTF);
 
 	unsigned char *master = master_grid.getCharMap();

@@ -234,7 +234,7 @@ void Costmap2D::worldToMapEnforceBounds(double wx, double wy, int& mx, int& my) 
   {
     mx = 0;
   }
-  else if (wx > resolution_ * size_x_ + origin_x_)
+  else if (wx >= resolution_ * size_x_ + origin_x_)
   {
     mx = size_x_ - 1;
   }
@@ -247,7 +247,7 @@ void Costmap2D::worldToMapEnforceBounds(double wx, double wy, int& mx, int& my) 
   {
     my = 0;
   }
-  else if (wy > resolution_ * size_y_ + origin_y_)
+  else if (wy >= resolution_ * size_y_ + origin_y_)
   {
     my = size_y_ - 1;
   }
@@ -263,6 +263,10 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
   int cell_ox, cell_oy;
   cell_ox = int((new_origin_x - origin_x_) / resolution_);
   cell_oy = int((new_origin_y - origin_y_) / resolution_);
+
+  // Nothing to update
+  if (cell_ox == 0 && cell_oy == 0)
+    return;
 
   // compute the associated world coordinates for the origin cell
   // because we want to keep things grid-aligned

@@ -38,7 +38,10 @@
 #include <costmap_2d/obstacle_layer.h>
 #include <costmap_2d/cuda_obstacle_layer.h>
 #include <costmap_2d/costmap_math.h>
+#include <tf2_ros/message_filter.h>
+
 #include <pluginlib/class_list_macros.h>
+#include <sensor_msgs/point_cloud2_iterator.h>
 
 PLUGINLIB_EXPORT_CLASS(costmap_2d::ObstacleLayer, costmap_2d::Layer)
 
@@ -78,10 +81,6 @@ void ObstacleLayer::onInitialize()
   nh.param("observation_sources", topics_string, std::string(""));
   ROS_INFO("    Subscribed to Topics: %s", topics_string.c_str());
 
-  // get our tf prefix
-  ros::NodeHandle prefix_nh;
-  const std::string tf_prefix = tf::getPrefixParam(prefix_nh);
-
   // now we need to split the topics based on whitespace which we can use a stringstream for
   std::stringstream ss(topics_string);
 
@@ -105,11 +104,6 @@ void ObstacleLayer::onInitialize()
     source_node.param("inf_is_valid", inf_is_valid, false);
     source_node.param("clearing", clearing, false);
     source_node.param("marking", marking, true);
-
-    if (!sensor_frame.empty())
-    {
-      sensor_frame = tf::resolve(tf_prefix, sensor_frame);
-    }
 
     if (!(data_type == "PointCloud2" || data_type == "PointCloud" || data_type == "LaserScan"))
     {
@@ -162,18 +156,17 @@ void ObstacleLayer::onInitialize()
       boost::shared_ptr < message_filters::Subscriber<sensor_msgs::LaserScan>
           > sub(new message_filters::Subscriber<sensor_msgs::LaserScan>(g_nh, topic, 50));
 
-      boost::shared_ptr < tf::MessageFilter<sensor_msgs::LaserScan>
-          > filter(new tf::MessageFilter<sensor_msgs::LaserScan>(*sub, *tf_, global_frame_, 50));
+      boost::shared_ptr<tf2_ros::MessageFilter<sensor_msgs::LaserScan> > filter(
+        new tf2_ros::MessageFilter<sensor_msgs::LaserScan>(*sub, *tf_, global_frame_, 50, g_nh));
 
       if (inf_is_valid)
       {
-        filter->registerCallback(
-            boost::bind(&ObstacleLayer::laserScanValidInfCallback, this, _1, observation_buffers_.back()));
+        filter->registerCallback(boost::bind(&ObstacleLayer::laserScanValidInfCallback, this, _1,
+                                            observation_buffers_.back()));
       }
       else
       {
-        filter->registerCallback(
-            boost::bind(&ObstacleLayer::laserScanCallback, this, _1, observation_buffers_.back()));
+        filter->registerCallback(boost::bind(&ObstacleLayer::laserScanCallback, this, _1, observation_buffers_.back()));
       }
 
       observation_subscribers_.push_back(sub);
@@ -191,9 +184,9 @@ void ObstacleLayer::onInitialize()
        ROS_WARN("obstacle_layer: inf_is_valid option is not applicable to PointCloud observations.");
       }
 
-      boost::shared_ptr < tf::MessageFilter<sensor_msgs::PointCloud>
-          > filter(new tf::MessageFilter<sensor_msgs::PointCloud>(*sub, *tf_, global_frame_, 50));
-      filter->registerCallback(
+        boost::shared_ptr < tf2_ros::MessageFilter<sensor_msgs::PointCloud>
+        > filter(new tf2_ros::MessageFilter<sensor_msgs::PointCloud>(*sub, *tf_, global_frame_, 50, g_nh));
+        filter->registerCallback(
           boost::bind(&ObstacleLayer::pointCloudCallback, this, _1, observation_buffers_.back()));
 
       observation_subscribers_.push_back(sub);
@@ -209,8 +202,8 @@ void ObstacleLayer::onInitialize()
        ROS_WARN("obstacle_layer: inf_is_valid option is not applicable to PointCloud observations.");
       }
 
-      boost::shared_ptr < tf::MessageFilter<sensor_msgs::PointCloud2>
-          > filter(new tf::MessageFilter<sensor_msgs::PointCloud2>(*sub, *tf_, global_frame_, 50));
+      boost::shared_ptr < tf2_ros::MessageFilter<sensor_msgs::PointCloud2>
+      > filter(new tf2_ros::MessageFilter<sensor_msgs::PointCloud2>(*sub, *tf_, global_frame_, 50, g_nh));
       filter->registerCallback(
           boost::bind(&ObstacleLayer::pointCloud2Callback, this, _1, observation_buffers_.back()));
 
@@ -264,7 +257,7 @@ void ObstacleLayer::laserScanCallback(const sensor_msgs::LaserScanConstPtr& mess
   {
     projector_.transformLaserScanToPointCloud(message->header.frame_id, *message, cloud, *tf_);
   }
-  catch (tf::TransformException &ex)
+  catch (tf2::TransformException &ex)
   {
     ROS_WARN("High fidelity enabled, but TF returned a transform exception to frame %s: %s", global_frame_.c_str(),
              ex.what());
@@ -301,7 +294,7 @@ void ObstacleLayer::laserScanValidInfCallback(const sensor_msgs::LaserScanConstP
   {
     projector_.transformLaserScanToPointCloud(message.header.frame_id, message, cloud, *tf_);
   }
-  catch (tf::TransformException &ex)
+  catch (tf2::TransformException &ex)
   {
     ROS_WARN("High fidelity enabled, but TF returned a transform exception to frame %s: %s",
              global_frame_.c_str(), ex.what());
@@ -372,13 +365,17 @@ void ObstacleLayer::updateBounds(double robot_x, double robot_y, double robot_ya
   {
     const Observation& obs = *it;
 
-    const pcl::PointCloud<pcl::PointXYZ>& cloud = *(obs.cloud_);
+    const sensor_msgs::PointCloud2& cloud = *(obs.cloud_);
 
     double sq_obstacle_range = obs.obstacle_range_ * obs.obstacle_range_;
 
-    for (unsigned int i = 0; i < cloud.points.size(); ++i)
+    sensor_msgs::PointCloud2ConstIterator<float> iter_x(cloud, "x");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_y(cloud, "y");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_z(cloud, "z");
+
+    for (; iter_x !=iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
     {
-      double px = cloud.points[i].x, py = cloud.points[i].y, pz = cloud.points[i].z;
+      double px = *iter_x, py = *iter_y, pz = *iter_z;
 
       // if the obstacle is too high or too far away from the robot we won't add it
       if (pz > max_obstacle_height_)
@@ -392,7 +389,7 @@ void ObstacleLayer::updateBounds(double robot_x, double robot_y, double robot_ya
           + (pz - obs.origin_.z) * (pz - obs.origin_.z);
 
       // if the point is far enough away... we won't consider it
-      if (sq_dist >=  sq_obstacle_range)
+      if (sq_dist >= sq_obstacle_range)
       {
         ROS_DEBUG("The point is too far away");
         continue;
@@ -503,14 +500,17 @@ void ObstacleLayer::raytraceFreespace(const Observation& clearing_observation, d
 {
   double ox = clearing_observation.origin_.x;
   double oy = clearing_observation.origin_.y;
-  pcl::PointCloud < pcl::PointXYZ > cloud = *(clearing_observation.cloud_);
+  const sensor_msgs::PointCloud2 &cloud = *(clearing_observation.cloud_);
+  sensor_msgs::PointCloud2ConstIterator<float> iter_x(cloud, "x");
+  sensor_msgs::PointCloud2ConstIterator<float> iter_y(cloud, "y");
 
   //Workaround for Eign align problems
-  MyPointXY *cloudArray=new MyPointXY[clearing_observation.cloud_->size()];
-  for(int i=0;i<clearing_observation.cloud_->size();++i)
+  auto size = cloud.height * cloud.width;
+  MyPointXY *cloudArray=new MyPointXY[size];
+  for(int i=0;i<size;++i,++iter_x,++iter_y)
   {
-      cloudArray[i].x=clearing_observation.cloud_->at(i).x;
-      cloudArray[i].y=clearing_observation.cloud_->at(i).y;
+      cloudArray[i].x=*iter_x;
+      cloudArray[i].y=*iter_y;
   }
 
   // get the map coordinates of the origin of the sensor
@@ -531,7 +531,7 @@ void ObstacleLayer::raytraceFreespace(const Observation& clearing_observation, d
 
   touch(ox, oy, min_x, min_y, max_x, max_y);
 
-  costmap_2d::cuda::obstacle_layer::rayTraceFreeSpace(costmap_,FREE_SPACE,clearing_observation.raytrace_range_,cloudArray,clearing_observation.cloud_->size(),ox,oy,origin_x,origin_y,map_end_x,map_end_y,resolution_,size_x_,size_y_,x0,y0,min_x,min_y,max_x,max_y);
+  costmap_2d::cuda::obstacle_layer::rayTraceFreeSpace(costmap_,FREE_SPACE,clearing_observation.raytrace_range_,cloudArray,size,ox,oy,origin_x,origin_y,map_end_x,map_end_y,resolution_,size_x_,size_y_,x0,y0,min_x,min_y,max_x,max_y);
 
   delete[] cloudArray;
 }

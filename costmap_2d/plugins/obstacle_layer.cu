@@ -2,7 +2,7 @@
 #include <costmap_2d/cuda_obstacle_layer.h>
 #include <costmap_2d/observation.h>
 
-#include <pcl/impl/point_types.hpp>
+// #include <pcl/impl/point_types.hpp>
 
 #include <cmath>
 
@@ -11,7 +11,7 @@
 using std::max;
 using std::ceil;
 
-using pcl::PointXYZ;
+// using pcl::PointXYZ;
 using costmap_2d::cuda::obstacle_layer::MyPointXY;
 
 __device__ bool worldToMap(double wx, double wy, unsigned int& mx, unsigned int& my, double origin_x, double origin_y,
