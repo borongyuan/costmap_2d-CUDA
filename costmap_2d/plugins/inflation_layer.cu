@@ -90,35 +90,28 @@ void costmap_2d::cuda::inflation_layer::setCostFlooding(unsigned char *master, u
         return;
     
     //Compress the original 2D cached cost into 1D for more convenient cuda_memcpy
-    unsigned char *cachedCost_1D=new unsigned char[cacheSize*cacheSize];
+    unsigned char *cachedCost_1D=NULL;
+    cudaMallocManaged(&cachedCost_1D, sizeof(unsigned char)*cacheSize*cacheSize, cudaMemAttachHost);
     for(int i=0;i<cacheSize;++i)
         memcpy(cachedCost_1D+cacheSize*i,cached_cost[i],cacheSize*sizeof(unsigned char));
     
-    CellData *obstaclesArray=new CellData[obstacles.size()];
+    CellData *obstaclesArray=NULL;
+    cudaMallocManaged(&obstaclesArray, sizeof(CellData)*obstacles.size(), cudaMemAttachHost);
     memcpy(obstaclesArray,&obstacles[0],obstacles.size()*sizeof(CellData));
 
-    unsigned char *cuda_master;
-    unsigned char *cuda_cachedCost_1D;
-    CellData *cuda_obstaclesArray;
-    cudaMalloc(&cuda_master,sizeof(unsigned char)*master_size_x*master_size_y);
-    cudaMalloc(&cuda_cachedCost_1D,sizeof(unsigned char)*cacheSize*cacheSize);
-    cudaMalloc(&cuda_obstaclesArray,sizeof(CellData)*obstacles.size());
-    
-    cudaMemcpy(cuda_master,master,sizeof(unsigned char)*master_size_x*master_size_y,cudaMemcpyHostToDevice);
-    cudaMemcpy(cuda_cachedCost_1D,cachedCost_1D,sizeof(unsigned char)*cacheSize*cacheSize,cudaMemcpyHostToDevice);
-    cudaMemcpy(cuda_obstaclesArray,obstaclesArray,sizeof(CellData)*obstacles.size(),cudaMemcpyHostToDevice);
+    cudaStreamAttachMemAsync(NULL, master, 0, cudaMemAttachGlobal);
+    cudaStreamAttachMemAsync(NULL, cachedCost_1D, 0, cudaMemAttachGlobal);
+    cudaStreamAttachMemAsync(NULL, obstaclesArray, 0, cudaMemAttachGlobal);
 
     //2*inflation_radius+1 is actually inflation diameter, but we still had better pass raduis into kernel.
     unsigned long totalWorkload=obstacles.size()*(2*inflation_radius+1)*(2*inflation_radius+1);
     if(inflate_unknown)
-        setCostFloodingInflateUnkown<<<(totalWorkload+TPB-1)/TPB,TPB>>>(cuda_master,master_size_x,master_size_y,cuda_cachedCost_1D,cacheSize,cuda_obstaclesArray,obstacles.size(),inflation_radius,min_i,min_j,max_i,max_j);
+        setCostFloodingInflateUnkown<<<(totalWorkload+TPB-1)/TPB,TPB>>>(master,master_size_x,master_size_y,cachedCost_1D,cacheSize,obstaclesArray,obstacles.size(),inflation_radius,min_i,min_j,max_i,max_j);
     else
-        setCostFloodingNoInflateUnkown<<<(totalWorkload+TPB-1)/TPB,TPB>>>(cuda_master,master_size_x,master_size_y,cuda_cachedCost_1D,cacheSize,cuda_obstaclesArray,obstacles.size(),inflation_radius,min_i,min_j,max_i,max_j);
+        setCostFloodingNoInflateUnkown<<<(totalWorkload+TPB-1)/TPB,TPB>>>(master,master_size_x,master_size_y,cachedCost_1D,cacheSize,obstaclesArray,obstacles.size(),inflation_radius,min_i,min_j,max_i,max_j);
     
-    cudaMemcpy(master,cuda_master,sizeof(unsigned char)*master_size_x*master_size_y,cudaMemcpyDeviceToHost);
-    cudaFree(cuda_master);
-    cudaFree(cuda_cachedCost_1D);
-    cudaFree(cuda_obstaclesArray);
-    delete [] cachedCost_1D;
-    delete [] obstaclesArray;
+    cudaStreamAttachMemAsync(NULL, master, 0, cudaMemAttachHost);
+    cudaStreamSynchronize(NULL);
+    cudaFree(cachedCost_1D);
+    cudaFree(obstaclesArray);
 }

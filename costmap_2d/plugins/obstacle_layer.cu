@@ -156,12 +156,8 @@ void costmap_2d::cuda::obstacle_layer::rayTraceFreeSpace(unsigned char *costmap,
     double map_end_x, double map_end_y, double resolution, unsigned int size_x, unsigned int size_y,
     unsigned int x0, unsigned int y0, double *min_x, double *min_y, double *max_x, double *max_y)
 {
-    MyPointXY *cuda_cloudArray;
-    cudaMalloc(&cuda_cloudArray,sizeof(MyPointXY)*cloudArraySize);
-    cudaMemcpy(cuda_cloudArray,cloudArray,sizeof(MyPointXY)*cloudArraySize,cudaMemcpyHostToDevice);
-    unsigned char *cuda_costmap;
-    cudaMalloc(&cuda_costmap,sizeof(unsigned char)*size_x*size_y);
-    cudaMemcpy(cuda_costmap,costmap,sizeof(unsigned char)*size_x*size_y,cudaMemcpyHostToDevice);
+    cudaStreamAttachMemAsync(NULL, cloudArray, 0, cudaMemAttachGlobal);
+    cudaStreamAttachMemAsync(NULL, costmap, 0, cudaMemAttachGlobal);
     double *cuda_min_x,*cuda_min_y,*cuda_max_x,*cuda_max_y;
     cudaMalloc(&cuda_min_x,sizeof(double));
     cudaMemcpy(cuda_min_x,min_x,sizeof(double),cudaMemcpyHostToDevice);
@@ -172,15 +168,14 @@ void costmap_2d::cuda::obstacle_layer::rayTraceFreeSpace(unsigned char *costmap,
     cudaMalloc(&cuda_max_y,sizeof(double));
     cudaMemcpy(cuda_max_y,max_y,sizeof(double),cudaMemcpyHostToDevice);
 
-    rayTraceFreeSpaceKernel<<<(cloudArraySize+TPB-1)/TPB,TPB>>>(cuda_costmap,defaultValue,raytraceRange,cuda_cloudArray,cloudArraySize,origin_x,origin_y,ox,oy,map_end_x,map_end_y,resolution,size_x,size_y,x0,y0,cuda_min_x,cuda_min_y,cuda_max_x,cuda_max_y);
+    rayTraceFreeSpaceKernel<<<(cloudArraySize+TPB-1)/TPB,TPB>>>(costmap,defaultValue,raytraceRange,cloudArray,cloudArraySize,origin_x,origin_y,ox,oy,map_end_x,map_end_y,resolution,size_x,size_y,x0,y0,cuda_min_x,cuda_min_y,cuda_max_x,cuda_max_y);
 
-    cudaMemcpy(costmap,cuda_costmap,sizeof(unsigned char)*size_x*size_y,cudaMemcpyDeviceToHost);
+    cudaStreamAttachMemAsync(NULL, costmap, 0, cudaMemAttachHost);
     cudaMemcpy(min_x,cuda_min_x,sizeof(double),cudaMemcpyDeviceToHost);
     cudaMemcpy(min_y,cuda_min_y,sizeof(double),cudaMemcpyDeviceToHost);
     cudaMemcpy(max_x,cuda_max_x,sizeof(double),cudaMemcpyDeviceToHost);
     cudaMemcpy(max_y,cuda_max_y,sizeof(double),cudaMemcpyDeviceToHost);
-    cudaFree(cuda_cloudArray);
-    cudaFree(cuda_costmap);
+    cudaStreamSynchronize(NULL);
     cudaFree(cuda_min_x);
     cudaFree(cuda_min_y);
     cudaFree(cuda_max_x);

@@ -107,6 +107,7 @@ add_dependencies(costmap_2d ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTE
 target_link_libraries(costmap_2d
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
+  ${CUDA_LIBRARIES}
 )
 
 cuda_add_library(layers

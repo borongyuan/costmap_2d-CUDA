@@ -37,6 +37,7 @@
  *********************************************************************/
 #include <costmap_2d/costmap_2d.h>
 #include <cstdio>
+#include <cuda_runtime.h>
 
 using namespace std;
 
@@ -58,15 +59,14 @@ void Costmap2D::deleteMaps()
 {
   // clean up data
   boost::unique_lock<mutex_t> lock(*access_);
-  delete[] costmap_;
-  costmap_ = NULL;
+  cudaFree(costmap_);
 }
 
 void Costmap2D::initMaps(unsigned int size_x, unsigned int size_y)
 {
   boost::unique_lock<mutex_t> lock(*access_);
-  delete[] costmap_;
-  costmap_ = new unsigned char[size_x * size_y];
+  cudaFree(costmap_);
+  cudaMallocManaged(&costmap_, sizeof(unsigned char)*size_x*size_y, cudaMemAttachHost);
 }
 
 void Costmap2D::resizeMap(unsigned int size_x, unsigned int size_y, double resolution,

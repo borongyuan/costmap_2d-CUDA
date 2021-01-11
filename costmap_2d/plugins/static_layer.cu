@@ -87,17 +87,12 @@ void costmap_2d::cuda::static_layer::rollingUpdateCosts(costmap_2d::Costmap2D& m
 
 	unsigned long sizeToUpdate=(max_y-min_y)*(max_x-min_x);
 
-	unsigned char *cuda_master=NULL;
-	unsigned char *cuda_staticLayerCostmap=NULL;
-	cudaMalloc(&cuda_master,sizeof(unsigned char)*master_size);
-	cudaMalloc(&cuda_staticLayerCostmap,sizeof(unsigned char)*staticLayerCostmap_size);
+	cudaStreamAttachMemAsync(NULL, master, 0, cudaMemAttachGlobal);
+	cudaStreamAttachMemAsync(NULL, costmap_grid, 0, cudaMemAttachGlobal);
 
-	cudaMemcpy(cuda_master,master,sizeof(unsigned char)*master_size,cudaMemcpyHostToDevice);
-	cudaMemcpy(cuda_staticLayerCostmap,costmap_grid,sizeof(unsigned char)*staticLayerCostmap_size,cudaMemcpyHostToDevice);
+	rollingUpdateCostsKernel<<<(sizeToUpdate+TPB-1)/TPB,TPB>>>(master,master_size,masterParams,costmap_grid,staticLayerCostmap_size,staticLayerParams,layeredCostmapParams,serializedTF,min_x,min_y,max_x,max_y,use_maximum);
 
-	rollingUpdateCostsKernel<<<(sizeToUpdate+TPB-1)/TPB,TPB>>>(cuda_master,master_size,masterParams,cuda_staticLayerCostmap,staticLayerCostmap_size,staticLayerParams,layeredCostmapParams,serializedTF,min_x,min_y,max_x,max_y,use_maximum);
-
-	cudaMemcpy(master,cuda_master,sizeof(unsigned char)*master_size,cudaMemcpyDeviceToHost);
-	cudaFree(cuda_master);
-	cudaFree(cuda_staticLayerCostmap);
+	cudaStreamAttachMemAsync(NULL, master, 0, cudaMemAttachHost);
+	cudaStreamAttachMemAsync(NULL, costmap_grid, 0, cudaMemAttachHost);
+	cudaStreamSynchronize(NULL);
 }

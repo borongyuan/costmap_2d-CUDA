@@ -39,6 +39,7 @@
 #include <costmap_2d/cuda_obstacle_layer.h>
 #include <costmap_2d/costmap_math.h>
 #include <tf2_ros/message_filter.h>
+#include <cuda_runtime.h>
 
 #include <pluginlib/class_list_macros.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
@@ -506,7 +507,8 @@ void ObstacleLayer::raytraceFreespace(const Observation& clearing_observation, d
 
   //Workaround for Eign align problems
   auto size = cloud.height * cloud.width;
-  MyPointXY *cloudArray=new MyPointXY[size];
+  MyPointXY *cloudArray=NULL;
+  cudaMallocManaged(&cloudArray, sizeof(MyPointXY)*size, cudaMemAttachHost);
   for(int i=0;i<size;++i,++iter_x,++iter_y)
   {
       cloudArray[i].x=*iter_x;
@@ -533,7 +535,7 @@ void ObstacleLayer::raytraceFreespace(const Observation& clearing_observation, d
 
   costmap_2d::cuda::obstacle_layer::rayTraceFreeSpace(costmap_,FREE_SPACE,clearing_observation.raytrace_range_,cloudArray,size,ox,oy,origin_x,origin_y,map_end_x,map_end_y,resolution_,size_x_,size_y_,x0,y0,min_x,min_y,max_x,max_y);
 
-  delete[] cloudArray;
+  cudaFree(cloudArray);
 }
 
 void ObstacleLayer::activate()
